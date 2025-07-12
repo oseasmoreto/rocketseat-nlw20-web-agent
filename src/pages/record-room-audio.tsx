@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noConsole: <explanation> */
 import { useRef, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -12,9 +13,10 @@ type RoomParams = {
 };
 
 export function RecordRoomAudio() {
+  const params = useParams<RoomParams>();
   const [isRecording, setIsRecording] = useState(false);
   const recorder = useRef<MediaRecorder | null>(null);
-  const params = useParams<RoomParams>();
+  const intervalRef = useRef<NodeJS.Timeout>(null);
 
   function stopRecording() {
     setIsRecording(false);
@@ -22,9 +24,13 @@ export function RecordRoomAudio() {
     if (recorder.current && recorder.current.state !== 'inactive') {
       recorder.current.stop();
     }
+
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
   }
 
-  async function updloadAudio(audio: Blob) {
+  async function uploadAudio(audio: Blob) {
     const formData = new FormData();
 
     formData.append('file', audio, 'audio.webm');
@@ -39,13 +45,35 @@ export function RecordRoomAudio() {
 
     const result = await response.json();
 
-    // biome-ignore lint/suspicious/noConsole: <dev>
     console.log(result);
+  }
+
+  function createRecorder(audio: MediaStream) {
+    recorder.current = new MediaRecorder(audio, {
+      mimeType: 'audio/webm',
+      audioBitsPerSecond: 64_000,
+    });
+
+    recorder.current.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        uploadAudio(event.data);
+      }
+    };
+
+    recorder.current.onstart = () => {
+      console.log('Gravação iniciada!');
+    };
+
+    recorder.current.onstop = () => {
+      console.log('Gravação encerrada/pausada');
+    };
+
+    recorder.current.start();
   }
 
   async function startRecording() {
     if (!isRecordingSupported) {
-      alert('Unsupported record function');
+      alert('O seu navegador não suporta gravação');
       return;
     }
 
@@ -59,28 +87,13 @@ export function RecordRoomAudio() {
       },
     });
 
-    recorder.current = new MediaRecorder(audio, {
-      mimeType: 'audio/webm',
-      audioBitsPerSecond: 64_000,
-    });
+    createRecorder(audio);
 
-    recorder.current.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        updloadAudio(event.data);
-      }
-    };
+    intervalRef.current = setInterval(() => {
+      recorder.current?.stop();
 
-    recorder.current.onstart = () => {
-      // biome-ignore lint/suspicious/noConsole: <dev>
-      console.log('iniciou');
-    };
-
-    recorder.current.onstop = () => {
-      // biome-ignore lint/suspicious/noConsole: <dev>
-      console.log('parou');
-    };
-
-    recorder.current.start();
+      createRecorder(audio);
+    }, 5000);
   }
 
   if (!params.roomId) {
@@ -92,9 +105,9 @@ export function RecordRoomAudio() {
       {isRecording ? (
         <Button onClick={stopRecording}>Pausar gravação</Button>
       ) : (
-        <Button onClick={startRecording}>Gravar audio</Button>
+        <Button onClick={startRecording}>Gravar áudio</Button>
       )}
-      {isRecording ? <p>Granvando...</p> : <p>Pausado</p>}
+      {isRecording ? <p>Gravando...</p> : <p>Pausado</p>}
     </div>
   );
 }

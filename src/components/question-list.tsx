@@ -28,6 +28,7 @@ export function QuestionList(props: QuestionListProps) {
             question={{
               id: question.id,
               question: question.questions,
+              answer: question.answer,
               createdAt: question.createdAt,
             }}
           />
